@@ -1,0 +1,220 @@
+<% layout("layouts/boilerplate") %>
+
+<style>
+/* 
+   Category & Toggle Styling
+ */
+.category-filter {
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.tax-info {
+  display: none;
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  gap: 1rem;
+  padding: 0 1rem;
+}
+
+.category-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.category-buttons a {
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  border-radius: 20px;
+  color: black;
+}
+
+.category-buttons a.active {
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+
+.category-buttons a:hover {
+  background-color: #eee;
+}
+
+.category-buttons i {
+  font-size: 0.9rem;
+  margin-right: 0.3rem;
+}
+
+/* 
+   Capsule Toggle Styling
+ */
+.tax-toggle-container {
+  display: flex;
+  align-items: center;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  padding: 0.4rem 0.8rem;
+  background-color: #fff;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.tax-toggle-container .form-check-input {
+  width: 3rem;
+  height: 1.5rem;
+  border-radius: 1rem;
+  background-color: #ddd;
+  border: none;
+  appearance: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  position: relative;
+}
+
+.tax-toggle-container .form-check-input::before {
+  content: "";
+  position: absolute;
+  width: 1.2rem;
+  height: 1.2rem;
+  top: 0.15rem;
+  left: 0.15rem;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+.tax-toggle-container .form-check-input:checked {
+  background-color: #0d6efd;
+}
+
+.tax-toggle-container .form-check-input:checked::before {
+  transform: translateX(1.5rem);
+}
+
+.tax-toggle-container .form-check-label {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+/* Mobile: dropdown replaces buttons */
+.category-dropdown {
+  display: none;
+  padding: 0.5rem;
+  margin: 1rem auto;
+  font-size: 1rem;
+  text-align: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .category-buttons {
+    display: none;
+  }
+
+  .category-dropdown {
+    display: block;
+  }
+
+  .filter-bar {
+    justify-content: center;
+  }
+
+  .tax-toggle-container {
+    margin-left: 0;
+  }
+}
+
+/* Flash error message styling */
+.flash-error {
+  margin-top: 1rem;
+  padding: 0.75rem 1.25rem;
+  background-color: #f8d7da;
+  color: #842029;
+  border: 1px solid #f5c2c7;
+  border-radius: 5px;
+  text-align: center;
+}
+</style>
+
+<%
+  const currentCategory = typeof selectedCategory !== "undefined" ? selectedCategory : null;
+  const categories = [
+    { key: "trending", icon: "fa-fire", label: "Trending" },
+    { key: "rooms", icon: "fa-bed", label: "Rooms" },
+    { key: "iconiccities", icon: "fa-mountain-city", label: "Iconic Cities" },
+    { key: "mountains", icon: "fa-mountain-sun", label: "Mountains" },
+    { key: "castle", icon: "fa-chess-rook", label: "Castle" },
+    { key: "amazingpools", icon: "fa-water-ladder", label: "Amazing Pools" },
+    { key: "camping", icon: "fa-campground", label: "Camping" },
+    { key: "farmhouse", icon: "fa-cow", label: "Farmhouse" },
+    { key: "arctic", icon: "fa-snowman", label: "Arctic" }
+  ];
+%>
+
+<!--  Mobile Dropdown -->
+<select class="category-dropdown" onchange="location = this.value;">
+  <option value="/listings" <%= !currentCategory ? 'selected' : '' %>>All Categories</option>
+  <% for (let category of categories) { %>
+    <option value="/listings?category=<%= category.key %>" <%= currentCategory === category.key ? 'selected' : '' %>>
+      <%= category.label %>
+    </option>
+  <% } %>
+</select>
+
+<!--  Filter Bar -->
+<div class="filter-bar">
+  <div class="category-buttons">
+    <% for (let category of categories) { %>
+      <a href="/listings?<%= category.key ? `category=${category.key}` : '' %>" class="<%= currentCategory === category.key ? 'active' : '' %>">
+        <i class="fa-solid <%= category.icon %>"></i> <%= category.label %>
+      </a>
+    <% } %>
+  </div>
+
+  <!--  Tax toggle aligned right -->
+  <div class="tax-toggle-container">
+    <input class="form-check-input" type="checkbox" role="switch" id="switchCheckDefault">
+    <label class="form-check-label" for="switchCheckDefault">Display total after Taxes</label>
+  </div>
+</div>
+
+<!--  Flash Error Message -->
+<% if (error && error.length > 0) { %>
+  <div class="flash-error"><%= error %></div>
+<% } %>
+
+<!--  Listings Grid -->
+<div class="row row-cols-lg-3 row-cols-md-3 row-cols-sm-1 mt-3">
+  <% for (let listing of allListings) { %>
+    <a href="/listings/<%= listing._id %>" class="listing-link">
+      <div class="card col listing-card" data-category="<%= listing.category %>">
+        <img src="<%= listing.image.url %>" class="card-img-top" alt="listing_image" style="height:20rem;">
+        <div class="card-body">
+          <p class="card-text">
+            <b><%= listing.title %></b><br>
+            ₹ <%= listing.price.toLocaleString("en-IN") %>/Night
+            <i class="tax-info">&nbsp; &nbsp; +18% GST</i>
+          </p>
+        </div>
+      </div>
+    </a>
+  <% } %>
+</div>
+
+<!--  Toggle Script -->
+<script>
+  const taxSwitch = document.getElementById("switchCheckDefault");
+  taxSwitch.addEventListener("click", () => {
+    document.querySelectorAll(".tax-info").forEach(label => {
+      label.style.display = taxSwitch.checked ? "inline" : "none";
+    });
+  });
+</script>
