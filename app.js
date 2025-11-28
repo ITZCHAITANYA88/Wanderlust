@@ -1,3 +1,4 @@
+// Load env only in development
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
 }
@@ -10,7 +11,7 @@ const methodOverride = require("method-override");
 const ejsMate = require("ejs-mate");
 const ExpressError = require("./utils/ExpressError.js");
 const session = require("express-session");
-const MongoStore = require('connect-mongo');
+const MongoStore = require("connect-mongo");
 const flash = require("connect-flash");
 const passport = require("passport");
 const LocalStrategy = require("passport-local");
@@ -21,18 +22,49 @@ const listingsRouter = require("./routes/listing.js");
 const reviewRouter = require("./routes/review.js");
 const userRouter = require("./routes/user.js");
 
-// MongoDB connection
-// const MONGO_URL = "mongodb://127.0.0.1:27017/wanderlust";
-const dbUrl = process.env.ATLASDB_URL;
-main()
-  .then(() => console.log("Database connection successful"))
-  .catch((err) => console.error("Database connection error:", err));
+// ---------------------------
+// 🔥 GLOBAL ERROR HANDLERS
+// ---------------------------
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Rejection:", err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+});
 
-async function main() {
-  await mongoose.connect(dbUrl);
+// ---------------------------
+// 🔥 MONGODB CONNECTION (resilient with retries)
+// ---------------------------
+const dbUrl = process.env.ATLASDB_URL;
+
+async function connectWithRetry() {
+  const maxAttempts = 5;
+  let attempt = 1;
+
+  while (attempt <= maxAttempts) {
+    try {
+      await mongoose.connect(dbUrl);
+      console.log("MongoDB connected");
+      return;
+    } catch (err) {
+      console.error(`MongoDB connection attempt ${attempt} failed:`, err.message);
+      if (attempt === maxAttempts) {
+        console.error("❌ Max attempts reached. Server will still run without DB.");
+        return;
+      }
+      const delay = 2000 * attempt;
+      console.log(`Retrying in ${delay}ms...\n`);
+      await new Promise((res) => setTimeout(res, delay));
+      attempt++;
+    }
+  }
 }
 
-// View engine and middlewares
+connectWithRetry();
+
+// ---------------------------
+// View engine + middlewares
+// ---------------------------
 app.engine("ejs", ejsMate);
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -41,20 +73,24 @@ app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride("_method"));
 app.use(express.static(path.join(__dirname, "/public")));
 
+// ---------------------------
+// Session Store
+// ---------------------------
 const store = MongoStore.create({
-    mongoUrl: dbUrl,
-    crypto: {
+  mongoUrl: dbUrl,
+  crypto: {
     secret: process.env.SECRET,
-    },
-    touchAfter: 24 * 3600,
+  },
+  touchAfter: 24 * 3600,
 });
 
-store.on("error", () => {
-  console.log("ERROR IN MONGO SESSION STORE",err);
+store.on("error", (err) => {
+  console.error("❌ ERROR IN MONGO SESSION STORE", err);
 });
 
-
-// Session setup
+// ---------------------------
+// Session options
+// ---------------------------
 const sessionOptions = {
   store,
   secret: process.env.SECRET,
@@ -70,14 +106,19 @@ const sessionOptions = {
 app.use(session(sessionOptions));
 app.use(flash());
 
-// Passport setup
+// ---------------------------
+// Passport
+// ---------------------------
 app.use(passport.initialize());
 app.use(passport.session());
 passport.use(new LocalStrategy(User.authenticate()));
+
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
-// Global template variables
+// ---------------------------
+// Template locals
+// ---------------------------
 app.use((req, res, next) => {
   res.locals.currentUser = req.user;
   res.locals.success = req.flash("success");
@@ -85,23 +126,31 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
+// ---------------------------
+// Routers
+// ---------------------------
 app.use("/listings", listingsRouter);
 app.use("/listings/:id/reviews", reviewRouter);
 app.use("/", userRouter);
 
+// ---------------------------
 // 404 Handler
+// ---------------------------
 app.use((req, res, next) => {
   next(new ExpressError(404, "Page Not Found"));
 });
 
+// ---------------------------
 // Error Handler
+// ---------------------------
 app.use((err, req, res, next) => {
-  const { statusCode = 500, message = "Something went wrong!" } = err;
+  const { statusCode = 500 } = err;
   res.status(statusCode).render("listings/error.ejs", { err });
 });
 
-// Server
+// ---------------------------
+// Start server
+// ---------------------------
 app.listen(8080, () => {
   console.log("Server is listening on port 8080");
 });
